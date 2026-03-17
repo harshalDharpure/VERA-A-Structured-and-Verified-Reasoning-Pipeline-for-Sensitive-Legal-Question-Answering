@@ -1,0 +1,6 @@
+# Pipeline config for 500 no-options open-ended QA
+actual_data: train_500_no_options.jsonl
+rag_retrieved_context: rag_retrieved_500_no_options.jsonl
+save_file_main_model: result_openended_500.jsonl
+arr_prompt: ARR_prompting.txt
+llama_model3_2_3b: meta-llama/Llama-3.2-3B-Instruct
