@@ -238,15 +238,11 @@ The Authors
 *KNOSYS-D-25-09042R2 — June 2026*
 
 
-# Response to Reviewer #6 — Point 5: Retrieval leakage and source-excluded evaluation
+ Point 5: Retrieval leakage and source-excluded evaluation
 
 **Reviewer comment (summary):** The paper states that train/test splitting is passage-level, but it is unclear whether the test-time retrieval index excludes the originating judgment passage (and near-duplicates). The reviewer requests: (i) an explicit statement of exclusion policy; (ii) a source-excluded retrieval evaluation; and (iii) a performance breakdown with and without source-case access.
 
 ---
-
-## Our response
-
-We thank the reviewer for raising this important point. We have clarified our retrieval design, added a dedicated source-exclusion analysis, and report performance with and without source access below.
 
 ### (i) What is in the test-time retrieval index?
 
