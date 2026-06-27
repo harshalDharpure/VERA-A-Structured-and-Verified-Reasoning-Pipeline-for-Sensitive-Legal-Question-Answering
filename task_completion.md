@@ -236,3 +236,75 @@ The Authors
 **Before final resubmission:** Section 6.9 will be filled with completed expert-audit results (accuracy, κ, NLI false-positive rates, CoV validation). Manuscript NLI description will consistently cite DeBERTa-v3-large MNLI (no-contradiction scoring) throughout Sections 5.3 and 6.8.
 
 *KNOSYS-D-25-09042R2 — June 2026*
+
+
+# Response to Reviewer #6 — Point 5: Retrieval leakage and source-excluded evaluation
+
+**Reviewer comment (summary):** The paper states that train/test splitting is passage-level, but it is unclear whether the test-time retrieval index excludes the originating judgment passage (and near-duplicates). The reviewer requests: (i) an explicit statement of exclusion policy; (ii) a source-excluded retrieval evaluation; and (iii) a performance breakdown with and without source-case access.
+
+---
+
+## Our response
+
+We thank the reviewer for raising this important point. We have clarified our retrieval design, added a dedicated source-exclusion analysis, and report performance with and without source access below.
+
+### (i) What is in the test-time retrieval index?
+
+**Current VERA pipeline (as implemented and reported):**
+
+- The **FAISS retrieval index is built only from the statutory corpus** (`child_laws.txt`: POCSO Act, JJ Act, and related rules). **Judgment passages from CALSD are not indexed for retrieval.**
+- Therefore, at test time, the **originating passage, same-judgment text, and near-duplicate case chunks are not retrievable** through RAG in our main experiments—because they are not in the index at all.
+- **Important clarification:** In our open-ended 500-sample pipeline, the **source judgment passage is provided directly in the LLM prompt** (along with retrieved statutes). Source access in the main setting therefore comes from **prompt conditioning**, not from retrieval re-finding the case text.
+
+We have added this distinction explicitly in the revised manuscript (Section 5.1 / RAG setup and Section 6.8 ablation).
+
+### (ii) Source-excluded retrieval experiment
+
+To address the reviewer’s concern about what would happen **if** judgment passages were indexed, we ran an additional controlled experiment on all **500** open-ended samples (`train_500_no_options.jsonl`). We built an extended index containing **statutes + chunked judgment passages** (1,187 passage chunks from 498 unique passages; 3,857 statute chunks; embedding model: `intfloat/e5-base-v2`; top-*k* = 5).
+
+| Retrieval setting | Source passage in top-5? | Same-case in top-5? | Mean text overlap with source |
+|-------------------|--------------------------|---------------------|-------------------------------|
+| **Statutes only** (current RAG) | **0.0%** | **0.0%** | 0.054 |
+| **Extended index, no exclusion** | **49.2%** | **49.8%** | 0.168 |
+| **Extended index, source passage excluded** | **0.0%** | **4.4%** | 0.081 |
+| **Extended index, same case excluded** | **0.0%** | **0.0%** | 0.079 |
+
+**Interpretation:** If judgment passages were added to the index without exclusion, roughly **half** of test queries would retrieve their own source passage—supporting the reviewer’s concern that the task could partially reduce to passage re-finding. **Per-query exclusion of the originating passage (and optionally the full case) removes this leakage** (source hit rate 0%).
+
+Full per-sample results: `source_excluded_results/retrieval_analysis.json`.
+
+### (iii) Performance with vs without source access
+
+We regenerated answers **without the source passage in the prompt**, using Qwen2.5-7B-Instruct, and evaluated with the same NLI protocol as elsewhere in the revision (DeBERTa-v3-large-mnli, no-contradiction score, max(forward, reverse); τ = 0.75; *n* = 498 aligned samples).
+
+| Setting | Source access | NLI accuracy @ τ=0.75 | Mean NLI answer | Cosine @ τ=0.55 |
+|---------|---------------|------------------------|-----------------|-----------------|
+| **Main pipeline** | Passage in prompt + statute RAG | **99.03%** | 0.990 | 80.77% |
+| **Statutes only** | Statute RAG only; no passage | **97.79%** | 0.978 | 71.08% |
+| **Extended + source excluded** | Statute + other passages; own passage removed | **97.79%** | 0.980 | 77.91% |
+| **Extended + source allowed** | Statute + all passages (leakage condition) | **98.19%** | 0.983 | 80.72% |
+
+**Interpretation:**
+
+1. Removing the **prompt passage** reduces NLI accuracy by **~1.2 percentage points** (99.03% → 97.79%), showing that performance depends on explicit source access in the current design.
+2. Allowing **retrieval of the source passage** (extended index, no exclusion) recovers only **~0.4 points** relative to source-excluded extended retrieval (97.79% → 98.19%) and remains below the full prompt-passage baseline—consistent with retrieval providing partial, not full, substitute for the prompt passage.
+3. Our **primary reported results** use statute-only retrieval plus prompt passage; the extended-index analysis is a **stress test** demonstrating why passage-level exclusion would be necessary if case text were ever indexed.
+
+Results file: `source_excluded_results/performance_comparison.json`.
+
+### Manuscript changes
+
+- **Section 5.1 (RAG):** Explicit statement that the retrieval index contains **statutes only**; CALSD judgment passages are **not** indexed at test time.
+- **Section 6.8 (new ablation):** Table reporting retrieval hit rates and QA performance under the four settings above.
+- **Limitations:** We note that open-ended evaluation still uses the **gold reference answer** for automatic NLI scoring; this measures reference consistency, not independent legal correctness (addressed separately via expert audit).
+
+---
+
+## Suggested text for Section 6.8 (paper)
+
+> We evaluate retrieval leakage under four index configurations on the 500-sample open-ended subset. The production pipeline indexes **statutes only**; judgment passages are supplied via the **prompt**, not retrieval (source hit rate 0%). When judgment passages are added to the index without exclusion, **49.2%** of queries retrieve their own source passage in the top-5 results; **per-query source exclusion** reduces this to **0%**. Removing the prompt passage lowers NLI accuracy at τ=0.75 from **99.0%** to **97.8%**; allowing source passage retrieval under an extended index yields **98.2%**, still below the prompt-passage baseline. These results confirm that (a) our main setup does not retrieve source passages, but (b) any future case-aware index must exclude originating passages to avoid re-finding the test context.
+
+---
+
+*Prepared for KNOSYS-D-25-09042R2 revision. Numbers from `run_source_excluded_retrieval.py` (June 2026).*
+
